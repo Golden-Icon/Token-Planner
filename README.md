@@ -11,7 +11,7 @@ Windows or Linux and it runs.
 
 1. Export two CSVs from [ccugame.app](https://ccugame.app):
    - **Ships** — your account's ships and their `place` (hangar / buyback)
-   - **CCUs** — your account's upgrade CCUs and their `isBuyback` flag
+   - **CCUs** — your account's upgrade CCUs and where each sits (hangar / buyback)
 2. Drop both files onto the page.
 3. Read the two tabs.
 
