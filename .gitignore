@@ -1,0 +1,17 @@
+# Nothing to build — this is a single self-contained HTML file with no
+# dependencies. These entries stop local editor/OS cruft being committed.
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local export data — never commit account CSVs
+*.csv
+!no-such-file

@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Planner &mdash; CCU buyback upgrade planner</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --border: #2a323d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #4a9eff;
+    --good: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.2px; }
+  h1 span { color: var(--accent); }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main { padding: 24px 28px 64px; max-width: 1400px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.7px;
+    color: var(--muted); margin: 0 0 14px; font-weight: 600;
+  }
+  /* drop zone */
+  #drop {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    transition: border-color .15s, background .15s;
+    cursor: pointer;
+  }
+  #drop.hot { border-color: var(--accent); background: #12243a; }
+  #drop .big { font-size: 16px; margin-bottom: 6px; }
+  #drop .small { color: var(--muted); font-size: 13px; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .stat {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat .n { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+  .stat .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stat.good .n { color: var(--good); }
+  .stat.accent .n { color: var(--accent); }
+  .stat.warn .n { color: var(--warn); }
+  /* toolbar */
+  .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  input[type=search], select {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 7px; padding: 8px 11px; font-size: 13px;
+  }
+  input[type=search] { flex: 1; min-width: 200px; }
+  input[type=search]:focus, select:focus { outline: 1px solid var(--accent); }
+  button {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  /* table */
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border);
+    color: var(--muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  th:hover { color: var(--text); }
+  td { padding: 9px 10px; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:hover td { background: #1a212b; }
+  td.ship { font-weight: 600; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  tr.routeRow td { background: #12171e; padding: 6px 10px 6px 0; border-bottom: 1px solid #1b222b; }
+  tr.routeRow:hover td { background: #161d26; }
+  .rline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 2px 0; }
+  .rcost { min-width: 118px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .costtable { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+  .costtable td { padding: 3px 12px 3px 0; vertical-align: top; }
+  .costtable td.num { font-weight: 600; white-space: nowrap; }
+  .rpath { color: var(--muted); font-size: 12px; }
+  .hop { color: var(--text); }
+  .ar { color: var(--accent); }
+  .pill.best { background: #12351f; color: var(--good); margin-right: 6px; }
+  .pill.soft { background: #1c2735; color: var(--accent); }
+  .pill.free { background: #12351f; color: var(--good); }
+  .pill.buy { background: #3a2c10; color: var(--warn); }
+  .chain { color: var(--muted); font-size: 12px; }
+  /* cost breakdown popover - must not disturb the numeric column */
+  td.num { position: relative; }
+  details.cost { display: inline-block; margin-left: 6px; vertical-align: middle; }
+  details.cost > summary {
+    list-style: none; cursor: pointer; color: var(--accent);
+    font-size: 11px; font-weight: 700; line-height: 1;
+    border: 1px solid var(--border); border-radius: 4px; padding: 2px 5px;
+    display: inline-block;
+  }
+  details.cost > summary::-webkit-details-marker { display: none; }
+  details.cost[open] > .chain {
+    position: absolute; right: 0; top: 100%; z-index: 20;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 9px 12px; margin-top: 4px;
+    white-space: nowrap; text-align: left; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  }
+  .muted { color: var(--muted); }
+  details { margin-top: 6px; }
+  summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  .warnbox {
+    border-left: 3px solid var(--warn); background: #241d10;
+    padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px;
+  }
+  .warnbox b { color: var(--warn); }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .hidden { display: none !important; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .tab {
+    padding: 9px 16px; cursor: pointer; border-bottom: 2px solid transparent;
+    color: var(--muted); font-size: 13px; font-weight: 500;
+  }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Token <span>Planner</span></h1>
+  <p>Every ship your ccugame.app buyback can reach &mdash; loaded from your own CSV exports</p>
+</header>
+
+<main>
+  <div class="card">
+    <div id="drop">
+      <div class="big">Drop your ccugame CSV exports here</div>
+      <div class="small">
+        or <label style="color:var(--accent);cursor:pointer;text-decoration:underline">browse files</label>
+        &mdash; accepts <code>ships_*.csv</code> and <code>ccus_*.csv</code>.
+        Files are read in your browser and never leave this page.
+      </div>
+      <input type="file" id="picker" multiple accept=".csv,text/csv" class="hidden">
+    </div>
+  </div>
+
+  <div id="report" class="hidden">
+    <div class="card">
+      <h2>Summary</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card" id="coverageCard">
+      <h2>Coverage &amp; data quality</h2>
+      <div id="coverage"></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-tab="obtainable">Obtainable ships</div>
+      <div class="tab" data-tab="owned">Ships I own</div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Filter ships&hellip;">
+        <select id="onlyHops"><option value="all">All chain lengths</option></select>
+        <button id="csv">Download CSV</button>
+      </div>
+      <div class="scroll"><table id="tbl"></table></div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   Parsing - mirrors the CSV structure ccugame.app exports
+   ========================================================================= */
+
+function parseCSV(text) {
+  // Handles quoted fields, embedded commas and doubled quotes.
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  text = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (c !== "\r") field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return { header: [], objects: [] };
+
+  const header = rows[0].map(h => h.trim());
+  const objects = rows.slice(1)
+    .filter(r => r.some(c => c.trim() !== ""))
+    .map(r => {
+      const o = {};
+      header.forEach((h, i) => { o[h] = (r[i] ?? "").trim(); });
+      return o;
+    });
+  return { header, objects };
+}
+
+function classify(header) {
+  const s = new Set(header);
+  if (s.has("from") && s.has("to")) return "ccu";
+  if (s.has("name") && s.has("place")) return "ship";
+  return "unknown";
+}
+
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+/* Pledges are not always whole dollars - one hull in the sample export carries
+   a pledge of 277.75 - so never round a cost away. */
+const money = v => {
+  const n = Number(v) || 0;
+  const whole = Math.floor(n);
+  const cents = Math.round((n - whole) * 100);
+  if (cents === 0) return "$" + whole;
+  return "$" + whole + "." + String(cents).padStart(2, "0");
+};
+const truthy = v => String(v).trim().toLowerCase() === "true";
+
+/* Fold case/punctuation so 'Khartu-Al' and 'Khartu-al' are one ship. */
+const normalize = s => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/* Collapse variant spellings onto one canonical display name. */
+function buildNameIndex() {
+  const spellings = new Map();
+  const canonical = new Map();
+  return {
+    add(name) {
+      name = name.trim();
+      if (!name) return;
+      const k = normalize(name);
+      if (!spellings.has(k)) spellings.set(k, new Set());
+      spellings.get(k).add(name);
+    },
+    canonical(name) {
+      const k = normalize(name);
+      if (canonical.has(k)) return canonical.get(k);
+      const set = spellings.get(k) || new Set([name]);
+      const chosen = [...set].sort((a, b) => b.length - a.length || a.localeCompare(b))[0];
+      canonical.set(k, chosen);
+      return chosen;
+    },
+    keys() {
+      return [...spellings.keys()];
+    },
+    finalise() {
+      for (const k of spellings.keys()) this.canonical(k);
+    },
+    merges() {
+      const out = [];
+      for (const k of spellings.keys()) {
+        const v = [...spellings.get(k)];
+        if (v.length > 1) out.push({ canonical: this.canonical(k), variants: v.sort() });
+      }
+      return out.sort((a, b) => a.canonical.localeCompare(b.canonical));
+    }
+  };
+}
+
+/* =========================================================================
+   Graph
+   ========================================================================= */
+
+function buildGraph(files) {
+  const graph = {
+    edges: [],
+    adjacent: new Map(),
+    ownedShips: new Map(),
+    hangarRows: [],
+    ownedCcuSrcs: new Set(),
+    display: new Map()
+  };
+  const names = buildNameIndex();
+  const stats = { shipFiles: 0, ccuFiles: 0, skipped: [], rowsShips: 0 };
+
+  for (const { name: fname, data } of files) {
+    const kind = classify(data.header);
+    if (kind === "unknown") { stats.skipped.push(fname); continue; }
+
+    if (kind === "ship") {
+      stats.shipFiles++;
+      stats.rowsShips += data.objects.length;
+      for (const o of data.objects) {
+        const nm = (o.name || "").trim();
+        if (!nm) continue;
+        names.add(nm);
+        const key = normalize(nm);
+        let ship = graph.ownedShips.get(key);
+        if (!ship) {
+          ship = { key, name: nm, place: "", msrp: 0, pledge: 0, count: 0, inHangar: false, inBuyback: false,
+                   hangarCount: 0, buybackCount: 0, hangarPledge: 0, buybackPledge: Infinity };
+          graph.ownedShips.set(key, ship);
+        }
+        ship.count++;
+        // A ship can appear in more than one place (e.g. hulls in both hangar
+        // and buyback). Track both facts - `place` is only a display label.
+        const p = (o.place || "").trim();
+        const pledge = num(o.pledge);
+        if (p === "buyback") {
+          ship.inBuyback = true;
+          ship.buybackCount++;
+          // Several buyback hulls of the same ship can carry different pledges
+          // (event editions). You choose which hull to release, so the cheapest
+          // pledge is the one that matters.
+          if (pledge < ship.buybackPledge) ship.buybackPledge = pledge;
+        }
+        if (p === "hangar") {
+          ship.inHangar = true;
+          ship.hangarCount++;
+          ship.hangarPledge = pledge;
+        }
+        ship.place = ship.inHangar && !ship.inBuyback ? "hangar" : "buyback";
+        // Keep every hangar row intact. A name can repeat - you have two Fury
+        // MX hulls and two PTVs - and the row count matters, so never merge.
+        if (p === "hangar") {
+          graph.hangarRows.push({
+            name: nm, msrp: num(o.msrp), pledge: pledge,
+            insurance: num(o.insurance)
+          });
+        }
+        ship.msrp = num(o.msrp);
+        ship.pledge = pledge;
+      }
+    } else {
+      stats.ccuFiles++;
+      for (const o of data.objects) {
+        const src = (o.from || "").trim(), dst = (o.to || "").trim();
+        if (!src || !dst) continue;
+        names.add(src); names.add(dst);
+        const buyback = truthy(o.isBuyback);
+        const edge = {
+          src: normalize(src), dst: normalize(dst),
+          fromMsrp: num(o.fromMsrp), toMsrp: num(o.toMsrp),
+          pledge: num(o.pledge), saving: num(o.saving),
+          buyback, title: (o.title || "").trim()
+        };
+        graph.edges.push(edge);
+        if (!graph.adjacent.has(edge.src)) graph.adjacent.set(edge.src, []);
+        graph.adjacent.get(edge.src).push(edge);
+        if (buyback) graph.ownedCcuSrcs.add(edge.src);
+      }
+    }
+  }
+
+  // ccugame emits the same upgrade more than once: once as a CCU sitting in
+  // your hangar (`isBuyback=false` - you own it, applying it costs nothing) and
+  // once as a CCU sitting in the pledge store (`isBuyback=true` - it costs its
+  // pledge to release). Collect every variant for a leg so costing can pick the
+  // cheapest one available to us.
+  graph.edgeVariants = (src, dst) => {
+    const out = [];
+    for (const e of graph.adjacent.get(src) || []) {
+      if (e.dst === dst) out.push(e);
+    }
+    return out;
+  };
+
+
+  for (const ship of graph.ownedShips.values()) names.add(ship.name);
+  names.finalise();
+  for (const k of names.keys()) {
+    graph.display.set(k, names.canonical(k));
+  }
+  for (const ship of graph.ownedShips.values()) ship.name = graph.display.get(ship.key) || ship.key;
+
+  stats.merges = names.merges();
+  return { graph, stats };
+}
+
+function nodeOf(graph, key) { return graph.display.get(key) || key; }
+
+/* What one leg of a chain costs us: a CCU we own costs nothing to apply, a CCU
+   sitting in the pledge store costs its pledge to release. */
+function legCost(e) { return e.buyback ? e.pledge : 0; }
+
+
+
+/* Multi-source BFS: the shortest upgrade chain to each reachable ship.
+   Seeds are the ships you own that actually have an outgoing CCU edge.
+   We deliberately do NOT pre-mark other owned ships as visited: a chain may
+   legitimately run through a ship you already own (e.g. Constellation Taurus
+   -> Hurricane -> Terrapin), and cutting those would hide real chains. */
+/* Cost of one candidate route.
+
+   Every item on the chain is priced by where it actually sits in your account:
+
+     base ship in hangar  -> $0      (you own it and can use it)
+     base ship in buyback -> pledge  (what it costs to release that hull)
+     CCU in hangar        -> $0      (isBuyback=false: you own it)
+     CCU in buyback       -> pledge  (isBuyback=true: it costs to release)
+
+   MSRP is never a cost - it is not something you pay. The pledge on the row you
+   hold is the only real number. Where a ship has several buyback hulls at
+   different pledges we take the cheapest, because you choose which to release.
+
+   A ship you already own, upgraded only with CCUs you already own, is
+   genuinely $0. Four ships hit that in the sample exports (Orion, Ranger RC,
+   Starlancer MAX, Terrapin). Everything else costs something. */
+function routeCost(graph, path) {
+  const legs = [];
+  for (let i = 0; i < path.length - 1; i++) {
+    const variants = graph.edgeVariants(path[i], path[i + 1]);
+    let best = null, bestCost = Infinity;
+    for (const e of variants) {
+      const c = legCost(e);
+      if (c < bestCost) { bestCost = c; best = e; }
+    }
+    if (best) legs.push(best);
+  }
+
+  const baseShip = graph.ownedShips.get(path[0]) || {};
+  // Hangar base is free. A buyback base costs the pledge of the cheapest hull
+  // you hold in the pledge store.
+  const baseInHangar = baseShip.inHangar === true;
+  const baseCost = baseInHangar ? 0
+    : (baseShip.buybackCount > 0 ? baseShip.buybackPledge : 0);
+
+  const ccuPledge = legs.reduce((a, e) => a + legCost(e), 0);
+  const warbond = legs.some(e => e.saving > 0);
+
+  return {
+    cost: baseCost + ccuPledge,
+    baseCost,
+    baseInHangar,
+    ccuPledge,
+    warbond,
+    edges: legs
+  };
+}
+
+/* Every simple route from a seed you own to any reachable ship. */
+function allRoutes(graph, seeds) {
+  const routes = new Map();  // endShip -> [{cost, path, ...}]
+  for (const seed of seeds) {
+    const seen = new Set([seed]);
+    (function walk(node, path) {
+      if (path.length > 1) {
+        const rc = routeCost(graph, path);
+        const end = path[path.length - 1];
+        if (!routes.has(end)) routes.set(end, []);
+        // Copy the path - `path` is mutated during backtracking, so storing
+        // the reference would collapse every stored route back to length 1.
+        routes.get(end).push({ ...rc, path: path.slice() });
+      }
+      // Dedupe by destination: ccugame emits some upgrades twice (once as a
+      // held CCU, once as a purchasable one). They carry identical price data,
+      // so traversing both would only inflate the route count.
+      const dests = new Set();
+      for (const e of graph.adjacent.get(node) || []) {
+        if (dests.has(e.dst)) continue;
+        dests.add(e.dst);
+        if (seen.has(e.dst)) continue;
+        seen.add(e.dst);
+        path.push(e.dst);
+        walk(e.dst, path);
+        path.pop();
+        seen.delete(e.dst);
+      }
+    })(seed, [seed]);
+  }
+  for (const list of routes.values()) {
+    list.sort((a, b) => a.cost - b.cost || a.path.length - b.path.length ||
+                       a.path.join(">").localeCompare(b.path.join(">")));
+  }
+  return routes;
+}
+
+function computeResults(graph) {
+  const seeds = [...graph.ownedShips.keys()].filter(k => (graph.adjacent.get(k) || []).length);
+
+  const ships = [];
+  for (const [node, list] of allRoutes(graph, seeds)) {
+    // A ship already sitting in your buyback is not filtered out - it is an
+    // OPTION, listed alongside the chains and sorted with them by cost. You can
+    // always just release the hull for its pledge instead of building a chain.
+    const held = graph.ownedShips.get(node);
+    if (held && held.inBuyback) {
+      list.push({
+        cost: held.buybackPledge,
+        baseCost: held.buybackPledge,
+        baseInHangar: false,
+        ccuPledge: 0,
+        warbond: false,
+        isRelease: true,
+        buybackCount: held.buybackCount,
+        path: [node],
+        edges: []
+      });
+    }
+    list.sort((a, b) => a.cost - b.cost || a.path.length - b.path.length ||
+                       a.path.join(">").localeCompare(b.path.join(">")));
+    const best = list[0];
+    ships.push({
+      node,
+      name: nodeOf(graph, node),
+      cheapest: best.cost,
+      hops: best.path.length - 1,
+      from: nodeOf(graph, best.path[0]),
+      chain: best.path.map(n => nodeOf(graph, n)).join(" \u2192 "),
+      routes: list
+    });
+  }
+  // Cheapest first - the point of the tool.
+  ships.sort((a, b) => a.cheapest - b.cheapest || a.name.localeCompare(b.name));
+
+  return {
+    ships, seeds,
+    totals: {
+      seeds: seeds.length,
+      reachable: ships.length,
+      minCost: ships.reduce((a, s) => Math.min(a, s.cheapest), Infinity),
+      routes: ships.reduce((a, s) => a + s.routes.length, 0)
+    }
+  };
+}
+
+/* =========================================================================
+   Rendering
+   ========================================================================= */
+
+let STATE = null;
+
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function render() {
+  const { graph, stats, res } = STATE;
+  const t = res.totals;
+
+  const hangar = graph.hangarRows.length;
+  const buyback = [...graph.ownedShips.values()].filter(s => s.inBuyback).length;
+
+  el("stats").innerHTML = [
+    { n: t.reachable, l: "reachable ships", c: "accent" },
+    { n: money(t.minCost), l: "cheapest ship overall", c: "good" },
+    { n: t.routes, l: "distinct routes found", c: "" },
+    { n: hangar, l: "ships you own (hangar)", c: "good" },
+    { n: t.seeds, l: "chain bases (cost money)", c: "" },
+    { n: buyback, l: "ships in buyback", c: "" },
+    { n: graph.ownedShips.size, l: "distinct ship names", c: "" },
+    { n: stats.rowsShips, l: "total ship rows", c: "" }
+  ].map(s => `<div class="stat ${s.c}"><div class="n">${s.n}</div><div class="l">${s.l}</div></div>`).join("");
+
+  let cov = `<div class="kv">
+    <span class="k">Ships you own</span><span>${graph.hangarRows.length} hulls in hangar (free to use)</span>
+    <span class="k">Chain bases</span><span>${t.seeds} ships with an outgoing CCU &mdash; hangar <i>or</i> buyback. Starting a chain from a buyback ship costs its pledge to release.</span>
+    <span class="k">Reachable ships</span><span>${t.reachable}, sorted by cheapest first</span>
+    <span class="k">Routes enumerated</span><span>${t.routes} (expand any row to see them all)</span>
+    <span class="k">CCU edges read</span><span>${graph.edges.length}</span>
+    <span class="k">Files read</span><span>${stats.shipFiles} ship, ${stats.ccuFiles} CCU</span>
+  </div>`;
+
+  if (stats.merges.length) {
+    cov += `<h2 style="margin-top:18px">Name variants merged</h2><div class="kv">` +
+      stats.merges.map(m => `<span class="k">${esc(m.canonical)}</span><span class="muted">also appeared as ${esc(m.variants.join(", "))}</span>`).join("") +
+      `</div>`;
+  }
+  if (stats.skipped.length) {
+    cov += `<h2 style="margin-top:18px">Skipped files</h2><div class="muted">` +
+      stats.skipped.map(f => esc(f)).join(", ") + ` &mdash; unrecognised header</div>`;
+  }
+  cov += `<div class="warnbox" style="margin-top:18px">
+    <b>How cost is calculated.</b> Every item on a chain is priced by where it
+    sits in your account. MSRP is never used &mdash; it is not money you pay.
+
+    <table class="costtable">
+      <tr><td>base ship in <b>hangar</b></td><td class="num">$0</td><td class="muted">you own it and can use it</td></tr>
+      <tr><td>base ship in <b>buyback</b></td><td class="num">its pledge</td><td class="muted">what it costs to release that hull</td></tr>
+      <tr><td>CCU in <b>hangar</b> (<code>isBuyback=false</code>)</td><td class="num">$0</td><td class="muted">you own it, applying it is free</td></tr>
+      <tr><td>CCU in <b>buyback</b> (<code>isBuyback=true</code>)</td><td class="num">its pledge</td><td class="muted">costs its pledge to release</td></tr>
+    </table>
+
+    Where a ship has several buyback hulls at different pledges, the cheapest one
+    is used, since you choose which hull to release. A ship you already own,
+    upgraded only with CCUs you already own, is genuinely <b>$0</b>.
+    <br><br>
+    <b>Scope note.</b> Each route is priced independently and this does
+    <i>not</i> account for hulls or CCUs being consumed, so several routes may
+    compete for the same base ship.
+  </div>`;
+  el("coverage").innerHTML = cov;
+
+  el("report").classList.remove("hidden");
+  renderTable();
+}
+
+let tab = "obtainable", sortKey = "cheapest", sortDir = 1, expanded = new Set();
+
+function currentRows() {
+  const { graph, res } = STATE;
+  const q = el("q").value.trim().toLowerCase();
+  const only = el("onlyHops").value;
+
+  let rows;
+  if (tab === "owned") {
+    // "Ships I own" == the ships sitting in the hangar, i.e. the ones you can
+    // use right now without spending anything. One row per hull, exactly as
+    // it appears in the CSV. Buyback ships are NOT owned - they cost money to
+    // release - so they do not belong on this tab.
+    rows = graph.hangarRows.map(r => ({
+      name: r.name, msrp: r.msrp, pledge: r.pledge
+    }));
+  } else {
+    rows = res.ships.map(s => ({ ...s }));
+    if (only === "cheap") rows = rows.filter(r => r.cheapest <= 100);
+    else if (only !== "all") rows = rows.filter(r => String(r.hops) === only);
+  }
+
+  if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) ||
+    (r.chain || "").toLowerCase().includes(q) ||
+    (r.routes || []).some(rt => rt.path.some(p => STATE.graph.display.get(p).toLowerCase().includes(q))));
+
+  const key = sortKey;
+  rows.sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (typeof av === "string") return av.localeCompare(bv) * sortDir;
+    return (av - bv) * sortDir;
+  });
+  return rows;
+}
+
+function renderTable() {
+  const rows = currentRows();
+  const cols = tab === "owned"
+    ? [["name", "Ship"], ["msrp", "MSRP"], ["pledge", "Pledge"]]
+    : [["expand", ""], ["name", "Ship"], ["hops", "Hops"], ["from", "Start from"],
+       ["chain", "Chain"], ["cheapest", "Total cost", "What this route actually costs you out of pocket: $0 for anything you already own in your hangar, plus the pledge of every item still sitting in the pledge store. Expand the row to compare every route."],
+       ["nroutes", "Routes", "How many distinct upgrade routes reach this ship."]];
+
+  const head = cols.map(c => {
+    const arrow = sortKey === c[0] ? (sortDir > 0 ? " \u25b2" : " \u25bc") : "";
+    const clickable = ["expand", "name", "nroutes"].indexOf(c[0]) < 0 ? ` data-sort="${c[0]}" style="cursor:pointer"` : "";
+    return `<th${clickable}${c[2] ? ` title="${esc(c[2])}"` : ""}>${c[1]}${arrow}</th>`;
+  }).join("");
+
+  const body = rows.map(r => {
+    const open = expanded.has(r.node);
+    const tds = cols.map(c => {
+      const k = c[0];
+      if (k === "expand") {
+        if (tab === "owned") return `<td></td>`;
+        return `<td class="num"><button class="exp" data-node="${esc(r.node)}"
+          style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0 4px"
+          title="Show all routes">${open ? "\u25bc" : "\u25b6"}</button></td>`;
+      }
+      if (k === "name") return `<td class="ship">${esc(r.name)}</td>`;
+      if (k === "hops") return `<td class="num">${r.hops}</td>`;
+      if (k === "nroutes") return `<td class="num">${r.routes.length}</td>`;
+      if (k === "from") return `<td class="chain">${esc(r.from)}</td>`;
+      if (k === "cheapest") {
+        return `<td class="num">${money(r.cheapest)}</td>`;
+      }
+      if (k === "msrp") return `<td class="num">${r.msrp ? money(r.msrp) : "\u2014"}</td>`;
+      if (k === "pledge") return `<td class="num">${r.pledge ? money(r.pledge) : "\u2014"}</td>`;
+      if (k === "chain") return `<td class="chain">${esc(r.chain)}</td>`;
+      return "";
+    }).join("");
+
+    let main = `<tr>${tds}</tr>`;
+
+    if (tab !== "owned" && open) {
+      const g = STATE.graph;
+      const routeRows = r.routes.map((rt, i) => {
+        // A release option is not a chain - it is the hull already in your
+        // buyback, priced at its pledge. Show it as such so it is never mistaken
+        // for something you build.
+        if (rt.isRelease) {
+          return `<tr class="routeRow"><td></td>
+            <td colspan="7"><div class="rline">
+              <span class="rcost">${i === 0 ? '<span class="pill best">cheapest</span>' : ""}${money(rt.cost)}</span>
+              <span class="rpath"><span class="hop">${esc(r.name)}</span></span>
+              <span class="pill soft">already in buyback &times;${rt.buybackCount}</span>
+              <span class="muted">release the hull you already hold &mdash; no chain needed</span>
+            </div></td></tr>`;
+        }
+        const parts = rt.path.map((p) => `<span class="hop">${esc(nodeOf(g, p))}</span>`);
+        const hops = rt.path.length - 1;
+        const breakdown = [];
+        breakdown.push(rt.baseInHangar
+          ? `<span class="muted">base in hangar ${money(0)}</span>`
+          : `<span class="muted">base from buyback ${money(rt.baseCost)}</span>`);
+        breakdown.push(`<span class="muted">CCUs ${money(rt.ccuPledge)}</span>`);
+        return `<tr class="routeRow"><td></td>
+          <td colspan="7">
+            <div class="rline">
+              <span class="rcost">${i === 0 ? '<span class="pill best">cheapest</span>' : ""}${money(rt.cost)}</span>
+              <span class="rpath">${parts.join(' <span class="ar">&rarr;</span> ')}</span>
+              <span class="muted">${hops} hop${hops > 1 ? "s" : ""}</span>
+              ${breakdown.join(" + ")}
+              ${rt.warbond ? `<span class="pill soft" title="Uses a Warbond CCU (event-only edition).">warbond</span>` : ""}
+            </div>
+          </td></tr>`;
+      }).join("");
+      main += routeRows;
+    }
+    return main;
+  }).join("");
+
+  el("tbl").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+  if (!rows.length) {
+    el("tbl").innerHTML += `<tbody><tr><td colspan="${cols.length}" class="muted" style="padding:20px">No matches.</td></tr></tbody>`;
+  }
+  el("tbl").querySelectorAll("th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const k = th.dataset.sort;
+      if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = 1; }
+      renderTable();
+    });
+  });
+  el("tbl").querySelectorAll("button.exp").forEach(b => {
+    b.addEventListener("click", () => {
+      const n = b.dataset.node;
+      if (expanded.has(n)) expanded.delete(n); else expanded.add(n);
+      renderTable();
+    });
+  });
+}
+
+function downloadCSV() {
+  const rows = currentRows();
+  const g = STATE.graph;
+  const head = tab === "owned"
+    ? ["ship", "msrp", "pledge"]
+    : ["ship", "total_cost", "hops", "start_from", "route_count",
+       "route_cost", "route_hops", "route", "route_type",
+       "base_cost", "base_in_hangar", "ccu_cost"];
+  const body = rows.map(r => tab === "owned"
+    ? [r.name, r.msrp, r.pledge]
+    : [r.name, r.cheapest, r.hops, r.from, r.routes.length,
+       ...r.routes.flatMap(rt => [
+         rt.cost, rt.path.length - 1,
+         rt.path.map(p => nodeOf(g, p)).join(" -> "),
+         rt.isRelease ? "release-from-buyback" : "chain",
+         rt.baseCost, rt.baseInHangar ? "yes" : "no", rt.ccuPledge
+       ])]);
+
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = head.join(",") + "\n" + body.map(r => r.map(q).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `ccuships_${tab}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* =========================================================================
+   File loading
+   ========================================================================= */
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList).filter(f => /\.csv$/i.test(f.name));
+  if (!files.length) {
+    alert("Please choose CSV files (ships_*.csv / ccus_*.csv).");
+    return;
+  }
+  const parsed = [];
+  for (const f of files) {
+    const text = await f.text();
+    parsed.push({ name: f.name, data: parseCSV(text) });
+  }
+  const { graph, stats } = buildGraph(parsed);
+  if (!graph.edges.length) {
+    alert('No CCU upgrade rows found.\n\nExpected a CSV with "from" and "to" columns ' +
+          '(that is your ccus_*.csv export).');
+    return;
+  }
+  STATE = { graph, stats, res: computeResults(graph) };
+  window.__STATE = STATE;   // handy for inspection from the console
+  const res = STATE.res;
+  sortKey = "cheapest"; sortDir = 1;
+  expanded = new Set();
+  el("q").value = "";
+  // Build the chain-length filter from what we actually found.
+  el("onlyHops").innerHTML = '<option value="all">All ships</option>' +
+    '<option value="cheap">Under $100</option>' +
+    [1, 2, 3, 4, 5].map(k => {
+      const n = res.ships.filter(s => s.hops === k).length;
+      return n ? `<option value="${k}">${k} hop${k > 1 ? "s" : ""} (${n})</option>` : "";
+    }).join("");
+  render();
+}
+
+el("drop").addEventListener("click", () => el("picker").click());
+el("picker").addEventListener("change", e => handleFiles(e.target.files));
+
+const drop = el("drop");
+["dragenter", "dragover"].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave", "drop"].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  tab = t.dataset.tab;
+  sortKey = tab === "owned" ? "name" : "cheapest"; sortDir = 1;
+  renderTable();
+}));
+el("q").addEventListener("input", renderTable);
+el("onlyHops").addEventListener("change", renderTable);
+el("csv").addEventListener("click", downloadCSV);
+</script>
+</body>
+</html>
